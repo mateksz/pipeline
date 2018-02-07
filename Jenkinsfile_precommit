@@ -1,0 +1,22 @@
+pipeline {
+  agent any
+
+  stages {
+		stage('CloneFromSC') {
+			steps {
+				checkout([$class: 'GitSCM', branches: [[name: '*/${GERRIT_BRANCH}']],
+     				userRemoteConfigs: [[url: 'ssh://10.0.3.29:29418/spring-petclinic.git']]])
+			}
+    }
+    stage('Build') {
+      steps {
+        sh 'mvn clean package'
+      }
+      post {
+        success {
+          junit 'target/surefire-reports/**/*.xml'
+        }
+      }
+    }
+  }
+ }

@@ -1,0 +1,85 @@
+pipeline {
+  agent any
+
+  stages {
+    stage('CloneFromSCM') {
+      steps {
+        checkout(
+                  [$class: 'GitSCM', 
+                    branches: [[name: '*/dev']], 
+                    doGenerateSubmoduleConfigurations: false, 
+                    extensions: [], 
+                    submoduleCfg: [], 
+                    userRemoteConfigs: 
+                    [[credentialsId: 'add49101-6aad-4c1c-af1f-a73e5503ee92', 
+                    url: 'ssh://localhost:29418/spring-petclinic.git']]
+                  ]
+                )
+            }
+          }
+    stage('BuildAndDeploy') {
+      steps {
+        sh "mvn clean deploy"
+      }
+    }
+    stage('SetBuildVersion') {
+      steps {
+        script {
+          pom = readMavenPom file: 'pom.xml'
+          BUILD_VERSION = pom.version
+        }
+      }
+    }
+    stage('DeployToEnvironment') {
+      steps {
+        build(
+                job: "PetClinicDeployment",
+                parameters: [
+                [
+                  $class: 'StringParameterValue',
+                  name: 'artefactVersion',
+                  value: String.valueOf(BUILD_VERSION)
+                ]
+              ]
+            )
+      }
+    }
+    stage('Promotion') {
+      steps {
+        script {
+          RELEASE_VERSION = String.valueOf(BUILD_VERSION).minus("-SNAPSHOT")
+          RELEASE_COMMIT = env.GERRIT_PATCHSET_REVISION
+          RELEASE_HEAD_MSG = env.GERRIT_CHANGE_SUBJECT
+
+          def userConfirmation = input(
+                                        id: 'userConfirmation',
+                                        message: "Please confirm the release of pet clinic version " + RELEASE_VERSION + " \n\nwith HEAD at " + RELEASE_COMMIT + " \n\n" + RELEASE_HEAD_MSG,
+                                        parameters: [
+                                                      [$class: 'ChoiceParameterDefinition',
+                                                        defaultValue: 'strDef',
+                                                        description: 'Choices',
+                                                        name: 'Promote?',
+                                                        choices: "Promote this build\nCancel"
+                                                      ]
+                                                    ]
+                                      )  
+          println(userConfirmation)
+          if( userConfirmation == "Promote this build" ) {
+            def job = build job: 'PetClinicPromotion',
+                            parameters: [
+                                          [$class: 'StringParameterValue',
+                                            name: 'RELEASE_VERSION',
+                                            value: String.valueOf(RELEASE_VERSION)
+                                          ],
+                                          [$class: 'StringParameterValue',
+                                            name: 'RELEASE_COMMIT',
+                                            value: String.valueOf(RELEASE_COMMIT)
+                                          ]
+                                        ]
+                                          
+            }
+          }
+        }
+      }
+    }
+  }

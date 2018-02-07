@@ -1,0 +1,35 @@
+pipeline {
+	agent any
+	stages{
+		stage('CloneBuildSRC') {
+			when {
+				not {
+					environment name: 'RELEASE_VERSION', value: ''
+				}	
+			}
+			steps {
+				checkout(
+					[$class: 'GitSCM', 
+                    branches: [[name: RELEASE_COMMIT]], 
+                    doGenerateSubmoduleConfigurations: false, 
+                    extensions: [], 
+                    submoduleCfg: [], 
+                    userRemoteConfigs: 
+                    [[credentialsId: 'add49101-6aad-4c1c-af1f-a73e5503ee92', 
+                    url: 'ssh://localhost:29418/spring-petclinic.git']]
+					]
+                )
+			}
+		}
+		stage('Release') {
+			when {
+				not {
+					environment name: 'RELEASE_VERSION', value: ''
+				}
+			}
+			steps {
+				sh 'sed -i "s/[[:digit:]]\\.[[:digit:]]\\.[[:digit:]]-SNAPSHOT/$RELEASE_VERSION/" pom.xml && mvn clean deploy -Dmaven.test.skip=true'
+			}
+		}	
+	}
+}

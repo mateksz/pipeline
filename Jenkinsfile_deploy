@@ -1,0 +1,34 @@
+pipeline {
+	agent any
+	stages{
+		stage('CloneAnsiblePlaybook') {
+			when {
+				not {
+					environment name: 'artefactVersion', value: ''
+				}	
+			}
+			steps {
+				checkout(
+                  [$class: 'GitSCM', 
+                    branches: [[name: '*/master']], 
+                    doGenerateSubmoduleConfigurations: false, 
+                    extensions: [], 
+                    submoduleCfg: [], 
+                    userRemoteConfigs: 
+                    [[url: 'https://github.com/mateksz/ansible_deploy.git']]
+                  ]
+                )
+			}
+		}
+		stage('DeployWithAnsible') {
+			when {
+				not {
+					environment name: 'artefactVersion', value: ''
+				}
+			}
+			steps {
+				sh 'ansible-playbook  -i hosts deploy.yaml --extra-vars "version=$artefactVersion"'
+			}
+		}	
+	}
+}
